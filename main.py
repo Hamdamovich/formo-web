@@ -1,4 +1,5 @@
 import flet as ft
+import asyncio
 from views.login import login_view
 from views.home import home_view
 from views.payments_history import payments_history_view
@@ -15,8 +16,6 @@ async def main(page: ft.Page):
     # --- 1. SAHIFA ASOSIY SOZLAMALARI ---
     page.title = "Formo Mobile"
     page.window_icon = "assets/icon.png" 
-    
-    # Webda qora ekranni oldini olish uchun yuklanishni kutamiz
     page.padding = 0
     
     # Mavzuni xavfsiz yuklash
@@ -35,19 +34,19 @@ async def main(page: ft.Page):
     page.theme = ft.Theme(font_family="Poppins")
 
     # --- 2. YO'NALISHLAR (ROUTING) MANTIQI ---
-    def route_change(route_event):
+    async def route_change(route_event):
         try:
-            # Joriy mavzuga qarab ranglarni belgilash
             current_bg = "#F8F9FE" if page.theme_mode == ft.ThemeMode.LIGHT else "#1A1C1E"
             card_bg = "white" if page.theme_mode == ft.ThemeMode.LIGHT else "#2D3033"
             
             page.views.clear()
             
-            # --- ROUTE TEKSHIRUVI ---
-            # Webda route "/" yoki bo'sh bo'lishi mumkin
+            # --- LOGIN ---
             if page.route == "/" or page.route == "" or page.route is None:
+                # DIQQAT: login_view async bo'lgani uchun await bilan chaqirilishi shart
+                login_content = await login_view(page)
                 page.views.append(
-                    ft.View("/", controls=[ft.SafeArea(login_view(page), expand=True)], padding=0, bgcolor=current_bg)
+                    ft.View("/", controls=[ft.SafeArea(login_content, expand=True)], padding=0, bgcolor=current_bg)
                 )
             
             # --- ASOSIY SAHIFA ---
@@ -137,7 +136,6 @@ async def main(page: ft.Page):
             
         except Exception as e:
             print(f"Routing Error: {e}")
-            # Xato bo'lsa login sahifasiga qaytarish
             page.go("/") 
 
     # --- 3. NAVIGATION MANTIQI ---
@@ -150,11 +148,9 @@ async def main(page: ft.Page):
     page.on_route_change = route_change
     page.on_view_pop = view_pop
     
-    # Web uchun boshlang'ich yo'nalishni aniqlash
-    # GitHub Pagesda /formo-web/ dan keyingi qismni o'qiydi
+    # Boshlang'ich yo'nalish
     initial_route = page.route if page.route else "/"
-    page.go(initial_route)
+    await page.go_async(initial_route)
 
 if __name__ == "__main__":
-    # Webda assets papkasini to'g'ri ko'rsatish
     ft.app(target=main, assets_dir="assets", view=ft.AppView.WEB_BROWSER)
