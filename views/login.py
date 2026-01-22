@@ -1,13 +1,14 @@
 import flet as ft
 import requests
-import time
+import asyncio # time.sleep o'rniga ishlatamiz
 from .settings_config import ThemeManager
 
-def login_view(page: ft.Page):
+# Web uchun async def ishlatish tavsiya etiladi
+async def login_view(page: ft.Page):
     # ThemeManager modulini ishga tushiramiz
     tm = ThemeManager(page)
     
-    # API manzili (TAVSIYA: Har doim oxirgi ishlaydigan URL'ni tekshiring)
+    # API manzili
     API_URL = "https://formo-api.onrender.com/clients"
     
     # Dinamik Ranglar
@@ -38,13 +39,14 @@ def login_view(page: ft.Page):
         label_style=ft.TextStyle(size=12, color=SEC_TEXT)
     )
 
-    saved_contract = page.client_storage.get("contract_no")
+    # Webda storage'ni async olish
+    saved_contract = await page.client_storage.get_async("contract_no")
     if saved_contract:
         remember_me.value = True
     
-    def login_click(contract_no, phone):
-        input_contract = str(contract_no).strip()
-        input_phone = str(phone).strip()
+    async def login_click(e):
+        input_contract = str(contract_field.value).strip()
+        input_phone = str(phone_field.value).strip()
 
         if not input_contract or not input_phone:
             status_text.value = tm.get_word("fill_fields")
@@ -55,15 +57,15 @@ def login_view(page: ft.Page):
         # Animatsiyani boshlash
         status_container.content = status_icon
         status_icon.visible = True
-        status_icon.value = None 
         status_text.value = tm.get_word("checking")
         status_text.color = SEC_TEXT
         login_button.disabled = True
         page.update()
 
         try:
-            # API so'rovi
-            response = requests.get(API_URL, timeout=15)
+            # Webda API so'rovi (async wrapper ishlatish yaxshiroq, lekin requests ham ishlaydi)
+            # Response kutish jarayoni
+            response = await asyncio.to_thread(requests.get, API_URL, timeout=15)
             
             if response.status_code == 200:
                 clients = response.json()
@@ -78,47 +80,39 @@ def login_view(page: ft.Page):
                         break
                 
                 if user_found:
-                    # --- MA'LUMOTLARNI SAQLASH (TO'LIQ YANGILANGAN QISM) ---
-                    # 1. Shaxsiy ma'lumotlar
+                    # --- MA'LUMOTLARNI SAQLASH ---
                     page.session.set("client_id", user_found.get('id'))
                     page.session.set("article_code", user_found.get('article_code'))
                     page.session.set("user_full_name", user_found.get('full_name', 'Mijoz'))
                     page.session.set("phone_number", user_found.get('phone_number'))
                     page.session.set("passport_info", user_found.get('passport_info'))
                     page.session.set("birth_date", user_found.get('birth_date'))
-                    
-                    # 2. Yashash manzili ma'lumotlari
                     page.session.set("address", user_found.get('address'))
                     page.session.set("floor", user_found.get('floor'))
                     page.session.set("apartment_number", user_found.get('apartment_number', '0/0'))
-                    
-                    # 3. Moliyaviy va hujjat ma'lumotlari
                     page.session.set("contract_number", user_found.get('contract_number'))
                     page.session.set("month_payments", user_found.get('month_payments'))
                     page.session.set("schedules_link", user_found.get('schedules_link'))
                     page.session.set("contracts_link", user_found.get('contracts_link'))
                     
-                    # Doimiy xotiraga (client_storage) saqlash
                     if remember_me.value:
-                        page.client_storage.set("contract_no", input_contract)
-                        page.client_storage.set("article_code", user_found.get('article_code'))
+                        await page.client_storage.set_async("contract_no", input_contract)
+                        await page.client_storage.set_async("article_code", user_found.get('article_code'))
                     else:
-                        page.client_storage.remove("contract_no")
-                        page.client_storage.remove("article_code")
+                        await page.client_storage.remove_async("contract_no")
+                        await page.client_storage.remove_async("article_code")
 
-                    # Muvaffaqiyatli animatsiya
                     status_container.content = ft.Icon(ft.Icons.CHECK_CIRCLE, color="green", size=30)
                     
                     full_name = user_found.get('full_name', '').strip()
                     name_parts = full_name.split()
                     display_name = name_parts[1] if len(name_parts) >= 2 else (name_parts[0] if name_parts else "Mijoz")
                     
-                    welcome_msg = tm.get_word("welcome")
-                    status_text.value = f"{welcome_msg}, {display_name}!"
+                    status_text.value = f"{tm.get_word('welcome')}, {display_name}!"
                     status_text.color = "green"
                     page.update()
                     
-                    time.sleep(1.2) 
+                    await asyncio.sleep(1.2) 
                     page.go("/home")
                 else:
                     status_container.content = ft.Icon(ft.Icons.CANCEL, color="red", size=30)
@@ -139,7 +133,7 @@ def login_view(page: ft.Page):
             login_button.disabled = False
             page.update()
 
-    def cancel_click(e):
+    async def cancel_click(e):
         contract_field.value = ""
         phone_field.value = ""
         status_text.value = ""
@@ -190,7 +184,7 @@ def login_view(page: ft.Page):
         width=135,
         height=45,
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=20)),
-        on_click=lambda _: login_click(contract_field.value, phone_field.value)
+        on_click=login_click
     )
 
     cancel_button = ft.OutlinedButton(
